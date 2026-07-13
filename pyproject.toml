@@ -55,6 +55,9 @@ Issues = "https://github.com/VectifyAI/OpenKB/issues"
 [project.scripts]
 openkb = "openkb.cli:cli"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
