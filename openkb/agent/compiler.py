@@ -42,6 +42,41 @@ from openkb.schema import INDEX_SEED, get_agents_md
 
 logger = logging.getLogger(__name__)
 
+# ============================================================
+# Unified logging — all logs under D:/ai_project/openkb/logs/
+# ============================================================
+_COMPILER_LOG_DIR = Path("logs")  # relative to working directory
+_COMPILER_LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+def _compiler_progress(msg: str) -> None:
+    """Append a timestamped line to openkb_progress.log."""
+    try:
+        now = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(_COMPILER_LOG_DIR / "openkb_progress.log", "a", encoding="utf-8") as f:
+            f.write(f"[{now}] {msg}\n")
+    except Exception:
+        pass
+
+def _compiler_llm_log(model: str, step: str, prompt_chars: int = 0,
+                      response_chars: int = 0, elapsed_s: float = 0,
+                      error: str = "", prompt_preview: str = "",
+                      response_preview: str = "") -> None:
+    """Append an LLM call record to openkb_llm.log."""
+    try:
+        now = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(_COMPILER_LOG_DIR / "openkb_llm.log", "a", encoding="utf-8") as f:
+            if error:
+                f.write(f"[{now}] ERROR step={step} model={model} elapsed={elapsed_s:.1f}s {error}\n")
+            else:
+                f.write(f"[{now}] REQUEST step={step} model={model} prompt={prompt_chars}chars\n")
+                if prompt_preview:
+                    f.write(f"         {prompt_preview}\n")
+                f.write(f"[{now}] RESPONSE step={step} elapsed={elapsed_s:.1f}s output={response_chars}chars\n")
+                if response_preview:
+                    f.write(f"         {response_preview}\n")
+    except Exception:
+        pass
+
 # ---------------------------------------------------------------------------
 # Prompt templates
 # ---------------------------------------------------------------------------
@@ -416,8 +451,19 @@ def _llm_call(
     spinner.start()
     t0 = time.time()
 
-    response = litellm.completion(model=model, messages=messages, **kwargs)
-    content = response.choices[0].message.content or ""
+    prompt_chars = sum(len(str(m.get("content", ""))) for m in messages)
+    prompt_tail = str(messages[-1].get("content",""))[:200].replace("\n"," ") if messages else ""
+    try:
+        response = litellm.completion(model=model, messages=messages, **kwargs)
+        content = response.choices[0].message.content or ""
+        elapsed = time.time() - t0
+        resp_tail = content[:200].replace("\n"," ")
+        _compiler_llm_log(model, step_name, prompt_chars, len(content), elapsed,
+                         prompt_preview=prompt_tail, response_preview=resp_tail)
+    except Exception as e:
+        elapsed = time.time() - t0
+        _compiler_llm_log(model, step_name, prompt_chars, 0, elapsed, f"{type(e).__name__}: {e}")
+        raise
     truncated = _warn_if_truncated(response, step_name, kwargs.get("max_tokens"))
 
     spinner.stop(_format_usage(time.time() - t0, response.usage))
@@ -448,8 +494,19 @@ async def _llm_call_async(
 
     t0 = time.time()
 
-    response = await litellm.acompletion(model=model, messages=messages, **kwargs)
-    content = response.choices[0].message.content or ""
+    prompt_chars = sum(len(str(m.get("content", ""))) for m in messages)
+    prompt_tail = str(messages[-1].get("content",""))[:200].replace("\n"," ") if messages else ""
+    try:
+        response = await litellm.acompletion(model=model, messages=messages, **kwargs)
+        content = response.choices[0].message.content or ""
+        elapsed = time.time() - t0
+        resp_tail = content[:200].replace("\n"," ")
+        _compiler_llm_log(model, step_name, prompt_chars, len(content), elapsed,
+                         prompt_preview=prompt_tail, response_preview=resp_tail)
+    except Exception as e:
+        elapsed = time.time() - t0
+        _compiler_llm_log(model, step_name, prompt_chars, 0, elapsed, f"{type(e).__name__}: {e}")
+        raise
     truncated = _warn_if_truncated(response, step_name, kwargs.get("max_tokens"))
 
     elapsed = time.time() - t0
@@ -2249,6 +2306,7 @@ async def compile_short_doc(
             entity_types=entity_types,
         )
     finally:
+        _compiler_progress(f"compile_long_doc: {doc_name} — done")
         # Close per-loop litellm async clients before asyncio.run tears this
         # loop down, to avoid the CLOSE-WAIT/FD leak across a long ingest.
         await _close_async_llm_clients()
@@ -2313,9 +2371,12 @@ async def compile_long_doc(
         ),
     }
 
+    _compiler_progress(f"compile_long_doc: {doc_name} — generating overview")
     # --- Step 1: Generate overview ---
     overview = _llm_call(model, [system_msg, doc_msg], "overview")
+    _compiler_progress(f"compile_long_doc: {doc_name} — overview done")
 
+    _compiler_progress(f"compile_long_doc: {doc_name} — generating concepts/entities")
     # --- Steps 2-4: Concept plan → generate/update → index ---
     try:
         await _compile_concepts(
@@ -2332,6 +2393,7 @@ async def compile_long_doc(
             entity_types=entity_types,
         )
     finally:
+        _compiler_progress(f"compile_long_doc: {doc_name} — done")
         # Close per-loop litellm async clients before asyncio.run tears this
         # loop down, to avoid the CLOSE-WAIT/FD leak across a long ingest.
         await _close_async_llm_clients()
