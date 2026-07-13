@@ -48,11 +48,18 @@ logger = logging.getLogger(__name__)
 _COMPILER_LOG_DIR = Path("logs")  # relative to working directory
 _COMPILER_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+# Per-document log suffix, set by compile functions.
+_compile_doc_suffix: str = ""
+
+def _set_compile_doc(name: str) -> None:
+    global _compile_doc_suffix
+    _compile_doc_suffix = f"_{name}" if name else ""
+
 def _compiler_progress(msg: str) -> None:
-    """Append a timestamped line to openkb_progress.log."""
+    """Append a timestamped line to openkb_progress[_doc].log."""
     try:
         now = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(_COMPILER_LOG_DIR / "openkb_progress.log", "a", encoding="utf-8") as f:
+        with open(_COMPILER_LOG_DIR / f"openkb_progress{_compile_doc_suffix}.log", "a", encoding="utf-8") as f:
             f.write(f"[{now}] {msg}\n")
     except Exception:
         pass
@@ -61,10 +68,10 @@ def _compiler_llm_log(model: str, step: str, prompt_chars: int = 0,
                       response_chars: int = 0, elapsed_s: float = 0,
                       error: str = "", prompt_preview: str = "",
                       response_preview: str = "") -> None:
-    """Append an LLM call record to openkb_llm.log."""
+    """Append an LLM call record to openkb_llm[_doc].log."""
     try:
         now = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(_COMPILER_LOG_DIR / "openkb_llm.log", "a", encoding="utf-8") as f:
+        with open(_COMPILER_LOG_DIR / f"openkb_llm{_compile_doc_suffix}.log", "a", encoding="utf-8") as f:
             if error:
                 f.write(f"[{now}] ERROR step={step} model={model} elapsed={elapsed_s:.1f}s {error}\n")
             else:
@@ -2326,6 +2333,7 @@ async def compile_long_doc(
     The summary page is already written by the indexer. This function
     generates concept pages and updates the index.
     """
+    _set_compile_doc(doc_name)
     from openkb.config import load_config
 
     openkb_dir = kb_dir / ".openkb"
