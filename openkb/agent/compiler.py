@@ -18,6 +18,7 @@ which LiteLLM passes through cleanly.
 from __future__ import annotations
 
 import asyncio
+import datetime
 import json
 import logging
 import re
@@ -43,10 +44,9 @@ from openkb.schema import INDEX_SEED, get_agents_md
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# Unified logging — all logs under D:/ai_project/openkb/logs/
+# Unified logging — all logs under logs/ (relative to cwd)
 # ============================================================
 _COMPILER_LOG_DIR = Path("logs")  # relative to working directory
-_COMPILER_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Per-document log suffix, set by compile functions.
 _compile_doc_suffix: str = ""
@@ -58,7 +58,8 @@ def _set_compile_doc(name: str) -> None:
 def _compiler_progress(msg: str) -> None:
     """Append a timestamped line to openkb_progress[_doc].log."""
     try:
-        now = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        _COMPILER_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with open(_COMPILER_LOG_DIR / f"openkb_progress{_compile_doc_suffix}.log", "a", encoding="utf-8") as f:
             f.write(f"[{now}] {msg}\n")
     except Exception:
@@ -70,7 +71,8 @@ def _compiler_llm_log(model: str, step: str, prompt_chars: int = 0,
                       response_preview: str = "") -> None:
     """Append an LLM call record to openkb_llm[_doc].log."""
     try:
-        now = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        _COMPILER_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with open(_COMPILER_LOG_DIR / f"openkb_llm{_compile_doc_suffix}.log", "a", encoding="utf-8") as f:
             if error:
                 f.write(f"[{now}] ERROR step={step} model={model} elapsed={elapsed_s:.1f}s {error}\n")
@@ -2313,7 +2315,7 @@ async def compile_short_doc(
             entity_types=entity_types,
         )
     finally:
-        _compiler_progress(f"compile_long_doc: {doc_name} — done")
+        _compiler_progress(f"compile_short_doc: {doc_name} — done")
         # Close per-loop litellm async clients before asyncio.run tears this
         # loop down, to avoid the CLOSE-WAIT/FD leak across a long ingest.
         await _close_async_llm_clients()
