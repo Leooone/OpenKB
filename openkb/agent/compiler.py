@@ -461,12 +461,12 @@ def _llm_call(
     t0 = time.time()
 
     prompt_chars = sum(len(str(m.get("content", ""))) for m in messages)
-    prompt_tail = str(messages[-1].get("content",""))[:500].replace("\n"," ") if messages else ""
+    prompt_tail = str(messages[-1].get("content","")).replace("\n"," ") if messages else ""
     try:
         response = litellm.completion(model=model, messages=messages, **kwargs)
         content = response.choices[0].message.content or ""
         elapsed = time.time() - t0
-        resp_tail = content[:500].replace("\n"," ")
+        resp_tail = content.replace("\n"," ")
         _compiler_llm_log(model, step_name, prompt_chars, len(content), elapsed,
                          prompt_preview=prompt_tail, response_preview=resp_tail)
     except Exception as e:
@@ -477,7 +477,7 @@ def _llm_call(
 
     spinner.stop(_format_usage(time.time() - t0, response.usage))
     logger.debug(
-        "LLM response [%s]:\n%s", step_name, content[:500] + ("..." if len(content) > 500 else "")
+        "LLM response [%s]:\n%s", step_name, content
     )
     if raise_on_truncation and truncated:
         raise TruncatedResponseError(
@@ -504,12 +504,12 @@ async def _llm_call_async(
     t0 = time.time()
 
     prompt_chars = sum(len(str(m.get("content", ""))) for m in messages)
-    prompt_tail = str(messages[-1].get("content",""))[:500].replace("\n"," ") if messages else ""
+    prompt_tail = str(messages[-1].get("content","")).replace("\n"," ") if messages else ""
     try:
         response = await litellm.acompletion(model=model, messages=messages, **kwargs)
         content = response.choices[0].message.content or ""
         elapsed = time.time() - t0
-        resp_tail = content[:500].replace("\n"," ")
+        resp_tail = content.replace("\n"," ")
         _compiler_llm_log(model, step_name, prompt_chars, len(content), elapsed,
                          prompt_preview=prompt_tail, response_preview=resp_tail)
     except Exception as e:
@@ -522,7 +522,7 @@ async def _llm_call_async(
     sys.stdout.write(f"    {step_name}... {_format_usage(elapsed, response.usage)}\n")
     sys.stdout.flush()
     logger.debug(
-        "LLM response [%s]:\n%s", step_name, content[:500] + ("..." if len(content) > 500 else "")
+        "LLM response [%s]:\n%s", step_name, content
     )
     if raise_on_truncation and truncated:
         raise TruncatedResponseError(
