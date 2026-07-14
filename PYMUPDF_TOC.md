@@ -47,3 +47,23 @@ uv pip install git+https://github.com/Leooone/OpenKB.git@pymupdf-toc
 - 只有带嵌入式书签的 PDF（USB4、DisplayPort、DSC 等标准文档）才能零 LLM TOC
 - 扫描件或无书签 PDF 走原有 LLM 路径，不受影响
 - `.env` 文件（API key）永远在本地，不进入仓库
+
+## 限速配置
+
+MiniMax Token Plan 等按量付费 API 即使并发=1 也可能触发 HTTP 429。
+通过环境变量控制：
+
+```bash
+# .env
+PAGEINDEX_MAX_CONCURRENCY=1   # 并发上限（默认 5）
+PAGEINDEX_RPM_LIMIT=20        # 每分钟请求上限（默认 0=不限）
+```
+
+| 参数 | 作用 | 建议值 |
+|---|---|---|
+| `PAGEINDEX_MAX_CONCURRENCY` | 同时飞行中的 LLM 调用数 | 1–5 |
+| `PAGEINDEX_RPM_LIMIT` | 滑动窗口限速（60s 窗口） | 20（MiniMax Token Plan） |
+
+限速逻辑来自 [PageIndex PR #343](https://github.com/VectifyAI/PageIndex/pull/343)：
+- `SlidingWindowRateLimiter`：滑动窗口限速，强制最小间隔
+- `_extract_retry_delay()`：429 时解析 Retry-After 头，否则指数退避+抖动
