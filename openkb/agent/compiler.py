@@ -53,14 +53,17 @@ _compile_doc_suffix: str = ""
 
 def _set_compile_doc(name: str) -> None:
     global _compile_doc_suffix
-    _compile_doc_suffix = f"_{name}" if name else ""
+    _compile_doc_suffix = f"{name}_" if name else ""
+    # 清空旧日志，确保 re-add 同一文档时从干净状态开始
+    for prefix in ("openkb_progress", "openkb_llm"):
+        (_COMPILER_LOG_DIR / f"{name}_{prefix}.log").unlink(missing_ok=True)
 
 def _compiler_progress(msg: str) -> None:
     """Append a timestamped line to openkb_progress[_doc].log."""
     try:
         _COMPILER_LOG_DIR.mkdir(parents=True, exist_ok=True)
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(_COMPILER_LOG_DIR / f"openkb_progress{_compile_doc_suffix}.log", "a", encoding="utf-8") as f:
+        with open(_COMPILER_LOG_DIR / f"{_compile_doc_suffix}openkb_progress.log", "a", encoding="utf-8") as f:
             f.write(f"[{now}] {msg}\n")
     except Exception:
         pass
@@ -73,7 +76,7 @@ def _compiler_llm_log(model: str, step: str, prompt_chars: int = 0,
     try:
         _COMPILER_LOG_DIR.mkdir(parents=True, exist_ok=True)
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(_COMPILER_LOG_DIR / f"openkb_llm{_compile_doc_suffix}.log", "a", encoding="utf-8") as f:
+        with open(_COMPILER_LOG_DIR / f"{_compile_doc_suffix}openkb_llm.log", "a", encoding="utf-8") as f:
             if error:
                 f.write(f"[{now}] ERROR step={step} model={model} elapsed={elapsed_s:.1f}s {error}\n")
             else:
